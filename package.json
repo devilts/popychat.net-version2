@@ -1,6 +1,6 @@
 {
   "name": "popychat",
-  "version": "1.0.0",
+  "version": "1.808.80010",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
