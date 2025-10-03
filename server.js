@@ -73,7 +73,7 @@ app.post("/groups/create",(req,res)=>{
   const user = users.find(u=>u.email===email);
   if(!user || user.role!=="admin") return res.status(403).json({error:"Only admins"});
   if(groups.find(g=>g.name===groupName)) return res.status(400).json({error:"Group exists"});
-  const group = {name:groupName,owner:email,admins:[email],members:[email]};
+  const group = {name:groupName,owner:email,admins:[email],members:[email],messages:[]};
   groups.push(group); save(GROUPS_FILE,groups);
   res.json({message:"Group created",group});
 });
@@ -99,6 +99,32 @@ app.post("/groups/promote",(req,res)=>{
   res.json({message:"User promoted",group});
 });
 
+// --- get all groups ---
 app.get("/groups",(req,res)=>{ res.json(load(GROUPS_FILE)); });
 
+// --- send group message ---
+app.post("/groups/message",(req,res)=>{
+  const {email,groupName,text} = req.body;
+  const users = load(USERS_FILE);
+  const groups = load(GROUPS_FILE);
+  const user = users.find(u=>u.email===email);
+  const group = groups.find(g=>g.name===groupName);
+  if(!user) return res.status(400).json({error:"User not found"});
+  if(!group) return res.status(404).json({error:"Group not found"});
+  if(!group.members.includes(email)) return res.status(403).json({error:"Not a member"});
+  group.messages.push({from:email,text,time:new Date().toISOString()});
+  save(GROUPS_FILE,groups);
+  res.json({message:"Message sent"});
+});
+
+// --- get group messages ---
+app.get("/groups/messages/:groupName",(req,res)=>{
+  const {groupName} = req.params;
+  const groups = load(GROUPS_FILE);
+  const group = groups.find(g=>g.name===groupName);
+  if(!group) return res.status(404).json({error:"Group not found"});
+  res.json(group.messages);
+});
+
+// --- start server ---
 app.listen(process.env.PORT || 3000,()=>console.log("✅ PopyChat running"));
