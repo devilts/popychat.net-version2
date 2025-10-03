@@ -1,5 +1,6 @@
 // ✅ CHANGE THIS TO YOUR RENDER BACKEND URL
-const API_URL = "https://popychat-net-version2.onrender.com"; 
+const API_URL = "https://popychat.net-version2.onrender.com/";
+ 
 
 let currentUser = null;
 let currentGroup = null;
