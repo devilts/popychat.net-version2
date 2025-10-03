@@ -1,56 +1,11 @@
-<div id="chat-app">
-  <h2>PopyChat</h2>
-  
-  <!-- Signup -->
-  <div id="signup">
-    <h3>Signup</h3>
-    <input type="email" id="signupEmail" placeholder="Email">
-    <input type="password" id="signupPassword" placeholder="Password">
-    <button onclick="signup()">Signup</button>
-  </div>
-  
-  <!-- Login -->
-  <div id="login">
-    <h3>Login</h3>
-    <input type="email" id="loginEmail" placeholder="Email">
-    <input type="password" id="loginPassword" placeholder="Password">
-    <button onclick="login()">Login</button>
-  </div>
-  
-  <!-- Chat + Groups (hidden until logged in) -->
-  <div id="chat" style="display:none;">
-    <h3>Welcome <span id="userEmail"></span></h3>
-    <p>Role: <span id="userRole"></span></p>
-
-    <div>
-      <h4>Create Group (Admin Only)</h4>
-      <input type="text" id="groupName" placeholder="Group Name">
-      <button onclick="createGroup()">Create</button>
-    </div>
-
-    <div>
-      <h4>Join Group</h4>
-      <input type="text" id="joinGroupName" placeholder="Group Name">
-      <button onclick="joinGroup()">Join</button>
-    </div>
-
-    <div>
-      <h4>All Groups</h4>
-      <button onclick="loadGroups()">Refresh Groups</button>
-      <ul id="groupsList"></ul>
-    </div>
-  </div>
-</div>
-
-<script>
-const API_URL = "https://popychat-net-version2.onrender.com";
+const API_URL = "/"; // same domain as Render backend
 let currentUser = null;
 
 async function signup() {
   const email = document.getElementById("signupEmail").value;
   const password = document.getElementById("signupPassword").value;
-  
-  const res = await fetch(`${API_URL}/signup`, {
+
+  const res = await fetch(`${API_URL}signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password })
@@ -62,29 +17,27 @@ async function signup() {
 async function login() {
   const email = document.getElementById("loginEmail").value;
   const password = document.getElementById("loginPassword").value;
-  
-  const res = await fetch(`${API_URL}/login`, {
+
+  const res = await fetch(`${API_URL}login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password })
   });
   const data = await res.json();
-  
-  if (data.error) {
-    alert(data.error);
-  } else {
-    currentUser = { email, role: data.role };
-    document.getElementById("userEmail").textContent = email;
-    document.getElementById("userRole").textContent = data.role;
-    document.getElementById("login").style.display = "none";
-    document.getElementById("signup").style.display = "none";
-    document.getElementById("chat").style.display = "block";
-  }
+
+  if (data.error) return alert(data.error);
+
+  currentUser = { email, role: data.role };
+  document.getElementById("userEmail").textContent = email;
+  document.getElementById("userRole").textContent = data.role;
+  document.getElementById("signup").style.display = "none";
+  document.getElementById("login").style.display = "none";
+  document.getElementById("chat").style.display = "block";
 }
 
 async function createGroup() {
   const groupName = document.getElementById("groupName").value;
-  const res = await fetch(`${API_URL}/groups/create`, {
+  const res = await fetch(`${API_URL}groups/create`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: currentUser.email, groupName })
@@ -95,7 +48,7 @@ async function createGroup() {
 
 async function joinGroup() {
   const groupName = document.getElementById("joinGroupName").value;
-  const res = await fetch(`${API_URL}/groups/join`, {
+  const res = await fetch(`${API_URL}groups/join`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: currentUser.email, groupName })
@@ -105,7 +58,7 @@ async function joinGroup() {
 }
 
 async function loadGroups() {
-  const res = await fetch(`${API_URL}/groups`);
+  const res = await fetch(`${API_URL}groups`);
   const groups = await res.json();
   const list = document.getElementById("groupsList");
   list.innerHTML = "";
@@ -115,4 +68,3 @@ async function loadGroups() {
     list.appendChild(li);
   });
 }
-</script>
