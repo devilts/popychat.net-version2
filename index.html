@@ -1,70 +1,72 @@
-const API_URL = "/"; // same domain as Render backend
-let currentUser = null;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PopyChat Dark</title>
+<style>
+  body { background: #0b0f1a; color: #e0e0e0; font-family: sans-serif; margin:0; padding:0; }
+  h2,h3 { margin: 10px 0; }
+  input, button { margin: 5px 0; padding: 8px; border-radius: 6px; border: 1px solid #444; background:#121823; color:#e0e0e0; width: 100%; }
+  button { cursor:pointer; background:#1b263b; }
+  #chat { display:none; padding:10px; }
+  #groupMessages { border:1px solid #444; padding:10px; height:250px; overflow-y:scroll; background:#121823; }
+  ul { padding-left:20px; }
+  li { cursor:pointer; padding:4px; }
+  li:hover { background:#1b263b; }
+  .card { background:#121823; padding:15px; margin:10px 0; border-radius:10px; }
+</style>
+</head>
+<body>
 
-async function signup() {
-  const email = document.getElementById("signupEmail").value;
-  const password = document.getElementById("signupPassword").value;
+<!-- SIGNUP -->
+<div id="signup" class="card">
+  <h2>Signup</h2>
+  <input type="email" id="signupEmail" placeholder="Email">
+  <input type="password" id="signupPassword" placeholder="Password">
+  <button onclick="signup()">Sign Up</button>
+</div>
 
-  const res = await fetch(`${API_URL}signup`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password })
-  });
-  const data = await res.json();
-  alert(data.message || data.error);
-}
+<!-- LOGIN -->
+<div id="login" class="card">
+  <h2>Login</h2>
+  <input type="email" id="loginEmail" placeholder="Email">
+  <input type="password" id="loginPassword" placeholder="Password">
+  <button onclick="login()">Login</button>
+</div>
 
-async function login() {
-  const email = document.getElementById("loginEmail").value;
-  const password = document.getElementById("loginPassword").value;
+<!-- CHAT -->
+<div id="chat">
+  <h2>Welcome <span id="userEmail"></span> (Role: <span id="userRole"></span>)</h2>
 
-  const res = await fetch(`${API_URL}login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password })
-  });
-  const data = await res.json();
+  <div class="card">
+    <h3>Create Group (Admin Only)</h3>
+    <input type="text" id="groupName" placeholder="Group Name">
+    <button onclick="createGroup()">Create</button>
+  </div>
 
-  if (data.error) return alert(data.error);
+  <div class="card">
+    <h3>Join Group</h3>
+    <input type="text" id="joinGroupName" placeholder="Group Name">
+    <button onclick="joinGroup()">Join</button>
+  </div>
 
-  currentUser = { email, role: data.role };
-  document.getElementById("userEmail").textContent = email;
-  document.getElementById("userRole").textContent = data.role;
-  document.getElementById("signup").style.display = "none";
-  document.getElementById("login").style.display = "none";
-  document.getElementById("chat").style.display = "block";
-}
+  <div class="card">
+    <h3>All Groups</h3>
+    <button onclick="loadGroups()">Refresh Groups</button>
+    <ul id="groupsList"></ul>
+  </div>
 
-async function createGroup() {
-  const groupName = document.getElementById("groupName").value;
-  const res = await fetch(`${API_URL}groups/create`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: currentUser.email, groupName })
-  });
-  const data = await res.json();
-  alert(data.message || data.error);
-}
+  <div id="currentGroup" class="card">
+    <h3>Group: <span id="currentGroupName">None</span></h3>
+    <div id="groupMessages"></div>
+    <input type="text" id="messageInput" placeholder="Type message...">
+    <button onclick="sendMessage()">Send</button>
+  </div>
+</div>
 
-async function joinGroup() {
-  const groupName = document.getElementById("joinGroupName").value;
-  const res = await fetch(`${API_URL}groups/join`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: currentUser.email, groupName })
-  });
-  const data = await res.json();
-  alert(data.message || data.error);
-}
+<script src="script.js"></script>
+</body>
+</html>
 
-async function loadGroups() {
-  const res = await fetch(`${API_URL}groups`);
-  const groups = await res.json();
-  const list = document.getElementById("groupsList");
-  list.innerHTML = "";
-  groups.forEach(g => {
-    const li = document.createElement("li");
-    li.textContent = `${g.name} (members: ${g.members.length})`;
-    list.appendChild(li);
-  });
-}
+
