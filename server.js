@@ -8,27 +8,32 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// file for storing user data
 const USERS_FILE = "./data.json";
+const GROUPS_FILE = "./groups.json";
 
-// your permanent admin emails
-const ADMIN_EMAILS = ["tobysaltmarsh@hotmail.com", "saltmarshtoby@gmai.com"];
+// permanent admin emails
+const ADMIN_EMAILS = ["youremail1@example.com", "youremail2@example.com"];
 
-// load users
-function loadUsers() {
-  if (!fs.existsSync(USERS_FILE)) return [];
-  return JSON.parse(fs.readFileSync(USERS_FILE));
+// helper functions
+function load(file) {
+  if (!fs.existsSync(file)) return [];
+  return JSON.parse(fs.readFileSync(file));
+}
+function save(file, data) {
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
-// save users
-function saveUsers(users) {
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-}
+// --- ROUTES ---
 
-// signup endpoint
+// homepage (fixes GET error)
+app.get("/", (req, res) => {
+  res.send("Welcome to PopyChat Backend API ✅ Use /signup /login /verify");
+});
+
+// signup
 app.post("/signup", (req, res) => {
   const { email, password } = req.body;
-  const users = loadUsers();
+  const users = load(USERS_FILE);
 
   if (users.find((u) => u.email === email)) {
     return res.status(400).json({ error: "User already exists" });
@@ -37,26 +42,23 @@ app.post("/signup", (req, res) => {
   const user = {
     email,
     password,
-    verified: false,
+    verified: ADMIN_EMAILS.includes(email),
     role: ADMIN_EMAILS.includes(email) ? "admin" : "user",
   };
 
   users.push(user);
-  saveUsers(users);
+  save(USERS_FILE, users);
 
-  // if it's one of your permanent admins → auto-verify
   if (ADMIN_EMAILS.includes(email)) {
-    user.verified = true;
-    saveUsers(users);
-    return res.json({ message: "Admin account created and verified." });
+    return res.json({ message: "Admin account created and verified" });
   }
 
-  // send email verification link
+  // email verification
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
       user: "YOUR_EMAIL@gmail.com",
-      pass: "YOUR_APP_PASSWORD", // generate an app password in Gmail
+      pass: "YOUR_APP_PASSWORD",
     },
   });
 
@@ -69,42 +71,41 @@ app.post("/signup", (req, res) => {
       from: "YOUR_EMAIL@gmail.com",
       to: email,
       subject: "Verify your PopyChat account",
-      text: `Click this link to verify: ${verifyLink}`,
+      text: `Click to verify your account: ${verifyLink}`,
     },
     (err) => {
       if (err) console.error("Email error:", err);
     }
   );
 
-  res.json({ message: "Signup successful, please check your email." });
+  res.json({ message: "Signup successful. Check your email to verify." });
 });
 
-// verification endpoint
+// verify email
 app.get("/verify", (req, res) => {
   const { email } = req.query;
-  const users = loadUsers();
+  const users = load(USERS_FILE);
   const user = users.find((u) => u.email === email);
 
   if (!user) return res.status(400).send("User not found");
 
   user.verified = true;
-  saveUsers(users);
+  save(USERS_FILE, users);
 
-  res.send("Your account has been verified! You can now log in.");
+  res.send("Your account has been verified ✅ You can now log in.");
 });
 
-// login endpoint
+// login
 app.post("/login", (req, res) => {
   const { email, password } = req.body;
-  const users = loadUsers();
+  const users = load(USERS_FILE);
   let user = users.find((u) => u.email === email);
 
   if (!user) {
-    // auto-create if email is one of the permanent admins
     if (ADMIN_EMAILS.includes(email)) {
       user = { email, password, verified: true, role: "admin" };
       users.push(user);
-      saveUsers(users);
+      save(USERS_FILE, users);
     } else {
       return res.status(400).json({ error: "User not found" });
     }
@@ -118,7 +119,6 @@ app.post("/login", (req, res) => {
     return res.status(400).json({ error: "Account not verified" });
   }
 
-  // make sure admins can never be demoted
   if (ADMIN_EMAILS.includes(email)) {
     user.role = "admin";
   }
@@ -126,4 +126,78 @@ app.post("/login", (req, res) => {
   res.json({ message: "Login successful", role: user.role });
 });
 
-app.listen(3000, () => console.log("Server running on port 3000"));
+// --- GROUP SYSTEM ---
+
+// create group (admin only)
+app.post("/groups/create", (req, res) => {
+  const { email, groupName } = req.body;
+  const users = load(USERS_FILE);
+  const groups = load(GROUPS_FILE);
+
+  const user = users.find((u) => u.email === email);
+  if (!user || user.role !== "admin") {
+    return res.status(403).json({ error: "Only admins can create groups" });
+  }
+
+  if (groups.find((g) => g.name === groupName)) {
+    return res.status(400).json({ error: "Group already exists" });
+  }
+
+  const group = {
+    name: groupName,
+    owner: email,
+    admins: [email],
+    members: [email],
+  };
+
+  groups.push(group);
+  save(GROUPS_FILE, groups);
+
+  res.json({ message: "Group created", group });
+});
+
+// join group
+app.post("/groups/join", (req, res) => {
+  const { email, groupName } = req.body;
+  const groups = load(GROUPS_FILE);
+
+  const group = groups.find((g) => g.name === groupName);
+  if (!group) return res.status(404).json({ error: "Group not found" });
+
+  if (!group.members.includes(email)) {
+    group.members.push(email);
+    save(GROUPS_FILE, groups);
+  }
+
+  res.json({ message: "Joined group", group });
+});
+
+// promote group admin
+app.post("/groups/promote", (req, res) => {
+  const { email, groupName, targetEmail } = req.body;
+  const groups = load(GROUPS_FILE);
+
+  const group = groups.find((g) => g.name === groupName);
+  if (!group) return res.status(404).json({ error: "Group not found" });
+
+  if (!group.admins.includes(email)) {
+    return res.status(403).json({ error: "Only group admins can promote" });
+  }
+
+  if (!group.admins.includes(targetEmail)) {
+    group.admins.push(targetEmail);
+  }
+
+  save(GROUPS_FILE, groups);
+  res.json({ message: "User promoted to group admin", group });
+});
+
+// list groups
+app.get("/groups", (req, res) => {
+  const groups = load(GROUPS_FILE);
+  res.json(groups);
+});
+
+// start server
+app.listen(3000, () => console.log("✅ Server running on port 3000"));
+console.log("application started")
