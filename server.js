@@ -1,190 +1,129 @@
+// server.js
 const express = require("express");
 const fs = require("fs");
-const crypto = require("crypto");
 const cors = require("cors");
 const nodemailer = require("nodemailer");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.use(cors());
 app.use(express.json());
-app.use(express.static("."));
+app.use(cors());
 
-const DATA_FILE = "data.json";
-let DB = { users: {}, groups: {} };
+// file for storing user data
+const USERS_FILE = "./data.json";
 
-// -------- CONFIG -----------
-const MAIN_ADMIN = "mainadmin"; 
-const ADMIN_EMAILS = ["your1@gmail.com","your2@gmail.com"]; 
+// your permanent admin emails
+const ADMIN_EMAILS = ["youremail1@example.com", "youremail2@example.com"];
 
-// Load DB
-if(fs.existsSync(DATA_FILE)){
-  DB = JSON.parse(fs.readFileSync(DATA_FILE));
-}else{
-  const hash = crypto.createHash("sha256").update("YourPasswordHere").digest("hex");
-  DB.users[MAIN_ADMIN] = {
-    password: hash,
-    email: ADMIN_EMAILS[0],
-    role: "admin",
-    verified: true,
-    messages: []
-  };
-  fs.writeFileSync(DATA_FILE, JSON.stringify(DB,null,2));
+// load users
+function loadUsers() {
+  if (!fs.existsSync(USERS_FILE)) return [];
+  return JSON.parse(fs.readFileSync(USERS_FILE));
 }
 
-// Helper
-function saveDB(){ fs.writeFileSync(DATA_FILE, JSON.stringify(DB,null,2)); }
-function hashPass(pw){ return crypto.createHash("sha256").update(pw).digest("hex"); }
+// save users
+function saveUsers(users) {
+  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+}
 
-// Nodemailer setup
-const transporter = nodemailer.createTransport({
-  service:"gmail",
-  auth:{
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
+// signup endpoint
+app.post("/signup", (req, res) => {
+  const { email, password } = req.body;
+  const users = loadUsers();
+
+  if (users.find((u) => u.email === email)) {
+    return res.status(400).json({ error: "User already exists" });
   }
-});
 
-// -------- SIGNUP --------
-app.post("/signup",(req,res)=>{
-  const { username,password,email } = req.body;
-  if(DB.users[username]) return res.json({ok:false,msg:"Username exists"});
-  const token = crypto.randomBytes(20).toString("hex");
-
-  DB.users[username] = {
-    password: hashPass(password),
+  const user = {
     email,
-    verified:false,
-    token,
-    role:"user",
-    messages:[]
+    password,
+    verified: false,
+    role: ADMIN_EMAILS.includes(email) ? "admin" : "user",
   };
-  saveDB();
 
-  const verifyLink = `https://popychat-net-version2.onrender.com/verify?token=${token}`;
-  transporter.sendMail({
-    from:`"PoppyChat" <${process.env.EMAIL_USER}>`,
-    to: email,
-    subject:"Verify your PoppyChat account",
-    text:`Click here to verify: ${verifyLink}`
+  users.push(user);
+  saveUsers(users);
+
+  // if it's one of your permanent admins → auto-verify
+  if (ADMIN_EMAILS.includes(email)) {
+    user.verified = true;
+    saveUsers(users);
+    return res.json({ message: "Admin account created and verified." });
+  }
+
+  // send email verification link
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: "YOUR_EMAIL@gmail.com",
+      pass: "YOUR_APP_PASSWORD", // generate an app password in Gmail
+    },
   });
 
-  res.json({ok:true,msg:"Account created. Check email to verify."});
+  const verifyLink = `https://popychat-net-version2.onrender.com/verify?email=${encodeURIComponent(
+    email
+  )}`;
+
+  transporter.sendMail(
+    {
+      from: "YOUR_EMAIL@gmail.com",
+      to: email,
+      subject: "Verify your PopyChat account",
+      text: `Click this link to verify: ${verifyLink}`,
+    },
+    (err) => {
+      if (err) console.error("Email error:", err);
+    }
+  );
+
+  res.json({ message: "Signup successful, please check your email." });
 });
 
-// -------- VERIFY EMAIL --------
-app.get("/verify",(req,res)=>{
-  const { token } = req.query;
-  const user = Object.values(DB.users).find(u=>u.token===token);
-  if(!user) return res.status(400).send("Invalid token");
+// verification endpoint
+app.get("/verify", (req, res) => {
+  const { email } = req.query;
+  const users = loadUsers();
+  const user = users.find((u) => u.email === email);
+
+  if (!user) return res.status(400).send("User not found");
+
   user.verified = true;
-  delete user.token;
-  saveDB();
-  res.send("Email verified! You can now log in.");
+  saveUsers(users);
+
+  res.send("Your account has been verified! You can now log in.");
 });
 
-// -------- LOGIN --------
-app.post("/login",(req,res)=>{
-  const { username,password } = req.body;
-  const user = DB.users[username];
-  if(!user) return res.json({ok:false,msg:"User not found"});
-  if(user.password!==hashPass(password)) return res.json({ok:false,msg:"Wrong password"});
-  if(!user.verified) return res.json({ok:false,msg:"Email not verified"});
+// login endpoint
+app.post("/login", (req, res) => {
+  const { email, password } = req.body;
+  const users = loadUsers();
+  let user = users.find((u) => u.email === email);
 
-  // Auto-admin if your emails
-  if(ADMIN_EMAILS.includes(user.email)) user.role="admin";
+  if (!user) {
+    // auto-create if email is one of the permanent admins
+    if (ADMIN_EMAILS.includes(email)) {
+      user = { email, password, verified: true, role: "admin" };
+      users.push(user);
+      saveUsers(users);
+    } else {
+      return res.status(400).json({ error: "User not found" });
+    }
+  }
 
-  res.json({ok:true,role:user.role});
+  if (user.password !== password) {
+    return res.status(400).json({ error: "Invalid password" });
+  }
+
+  if (!user.verified) {
+    return res.status(400).json({ error: "Account not verified" });
+  }
+
+  // make sure admins can never be demoted
+  if (ADMIN_EMAILS.includes(email)) {
+    user.role = "admin";
+  }
+
+  res.json({ message: "Login successful", role: user.role });
 });
 
-// -------- ADMIN ACTIONS --------
-app.post("/adminAction",(req,res)=>{
-  const { action, actor, target } = req.body;
-  const user = DB.users[actor];
-  if(!user || user.role!=="admin") return res.json({ok:false,msg:"Not an admin"});
-  const targetUser = DB.users[target];
-  if(!targetUser) return res.json({ok:false,msg:"Target not found"});
-  if(target===MAIN_ADMIN) return res.json({ok:false,msg:"Cannot modify main admin"});
-
-  if(action==="ban") delete DB.users[target];
-  else if(action==="promote") targetUser.role="admin";
-  else if(action==="demote") targetUser.role="user";
-  else return res.json({ok:false,msg:"Unknown action"});
-  saveDB();
-  res.json({ok:true});
-});
-
-// -------- PRIVATE MESSAGES --------
-app.post("/sendPM",(req,res)=>{
-  const { from,to,text } = req.body;
-  if(!DB.users[to]) return res.json({ok:false,msg:"Recipient not found"});
-  DB.users[to].messages.push({from,text});
-  saveDB();
-  res.json({ok:true});
-});
-
-app.get("/inbox/:username",(req,res)=>{
-  const user = DB.users[req.params.username];
-  if(!user) return res.json({ok:false,msg:"User not found"});
-  res.json({ok:true,messages:user.messages});
-});
-
-app.post("/deleteMsg",(req,res)=>{
-  const { username,index } = req.body;
-  const user = DB.users[username];
-  if(!user) return res.json({ok:false,msg:"User not found"});
-  if(!user.messages[index]) return res.json({ok:false,msg:"Invalid index"});
-  user.messages.splice(index,1);
-  saveDB();
-  res.json({ok:true});
-});
-
-// -------- GROUPS --------
-app.post("/createGroup",(req,res)=>{
-  const { currentUser,name,privacy } = req.body;
-  if(!DB.users[currentUser]) return res.json({ok:false,msg:"User not found"});
-  if(DB.groups[name]) return res.json({ok:false,msg:"Group exists"});
-  DB.groups[name] = { members:[currentUser], admins:[currentUser], messages:[], privacy };
-  saveDB();
-  res.json({ok:true});
-});
-
-app.post("/groupAction",(req,res)=>{
-  const { action, actor, groupName, target, text } = req.body;
-  const g = DB.groups[groupName];
-  if(!g) return res.json({ok:false,msg:"Group not found"});
-  const user = DB.users[actor];
-  if(!user || !g.members.includes(actor)) return res.json({ok:false,msg:"Not a member"});
-
-  if(action==="invite"){
-    if(!g.admins.includes(actor)) return res.json({ok:false,msg:"Only admins can invite"});
-    if(!DB.users[target]) return res.json({ok:false,msg:"User not found"});
-    if(!g.members.includes(target)) g.members.push(target);
-  } else if(action==="promote"){
-    if(!g.admins.includes(actor)) return res.json({ok:false,msg:"Only admins can promote"});
-    if(!g.members.includes(target)) return res.json({ok:false,msg:"Target not in group"}) ;
-    if(!g.admins.includes(target)) g.admins.push(target);
-  } else if(action==="demote"){
-    if(!g.admins.includes(actor)) return res.json({ok:false,msg:"Only admins can demote"});
-    g.admins = g.admins.filter(u=>u!==target);
-  } else if(action==="kick"){
-    if(!g.admins.includes(actor)) return res.json({ok:false,msg:"Only admins can kick"});
-    g.members = g.members.filter(u=>u!==target);
-  } else if(action==="send"){
-    if(!g.members.includes(actor)) return res.json({ok:false,msg:"Not a member"});
-    g.messages.push({from:actor,text});
-  } else return res.json({ok:false,msg:"Unknown action"});
-  saveDB();
-  res.json({ok:true});
-});
-
-app.get("/groupMessages/:groupName/:username",(req,res)=>{
-  const g = DB.groups[req.params.groupName];
-  if(!g) return res.json({ok:false,msg:"Group not found"});
-  if(!g.members.includes(req.params.username)) return res.json({ok:false,msg:"Not a member"});
-  res.json({ok:true,messages:g.messages});
-});
-
-// -------- START SERVER --------
-app.listen(PORT,()=>console.log(`Server running on port ${PORT}`));
+app.listen(3000, () => console.log("Server running on port 3000"));
