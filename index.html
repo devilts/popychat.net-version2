@@ -1,136 +1,118 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PoppyChat + Viberverse</title>
-<style>
-body{background:#0b1020;color:#e7e9ee;font-family:system-ui;padding:0;margin:0;}
-header{background:#0f162e;padding:16px;display:flex;justify-content:space-between;align-items:center;}
-.card{background:#121a36;padding:16px;margin:16px;border-radius:12px;}
-.hidden{display:none;}
-input,textarea,select,button{width:100%;margin-top:6px;padding:8px;border-radius:8px;background:#0c1329;color:#e7e9ee;border:1px solid #2a3766;}
-button{cursor:pointer;}
-.muted{color:#a9b3d1;font-size:13px;}
-#chatMessages{height:300px;overflow:auto;border:1px solid #2a3766;padding:8px;margin-top:6px;border-radius:8px;background:#0c1329;}
-</style>
-</head>
-<body>
-<header>
-<h1>PoppyChat</h1>
-<div id="whoami" class="muted">Not signed in</div>
-</header>
+<div id="chat-app">
+  <h2>PopyChat</h2>
+  
+  <!-- Signup -->
+  <div id="signup">
+    <h3>Signup</h3>
+    <input type="email" id="signupEmail" placeholder="Email">
+    <input type="password" id="signupPassword" placeholder="Password">
+    <button onclick="signup()">Signup</button>
+  </div>
+  
+  <!-- Login -->
+  <div id="login">
+    <h3>Login</h3>
+    <input type="email" id="loginEmail" placeholder="Email">
+    <input type="password" id="loginPassword" placeholder="Password">
+    <button onclick="login()">Login</button>
+  </div>
+  
+  <!-- Chat + Groups (hidden until logged in) -->
+  <div id="chat" style="display:none;">
+    <h3>Welcome <span id="userEmail"></span></h3>
+    <p>Role: <span id="userRole"></span></p>
 
-<!-- Login Card -->
-<div class="card" id="loginCard">
-<h2>Sign In</h2>
-<label>Username</label><input id="loginUser" autocomplete="username">
-<label>Password</label><input id="loginPass" type="password" autocomplete="current-password">
-<button id="loginBtn">Sign In</button>
-<div id="loginMsg" class="muted"></div>
-</div>
+    <div>
+      <h4>Create Group (Admin Only)</h4>
+      <input type="text" id="groupName" placeholder="Group Name">
+      <button onclick="createGroup()">Create</button>
+    </div>
 
-<!-- Main Menu -->
-<div class="card hidden" id="menuCard">
-<h2>Main Menu</h2>
-<button data-open="#pmCard">Private Messages</button>
-<button data-open="#groupsCard">Groups</button>
-</div>
+    <div>
+      <h4>Join Group</h4>
+      <input type="text" id="joinGroupName" placeholder="Group Name">
+      <button onclick="joinGroup()">Join</button>
+    </div>
 
-<!-- PM Card -->
-<div class="card hidden" id="pmCard">
-<h3>Private Messages</h3>
-<label>Recipient</label><input id="pmTo">
-<label>Message</label><textarea id="pmText"></textarea>
-<button id="pmSendBtn">Send</button>
-<div id="pmSendMsg" class="muted"></div>
-<div id="chatMessages"></div>
-</div>
-
-<!-- Groups Card -->
-<div class="card hidden" id="groupsCard">
-<h3>Groups</h3>
-<p>Groups functionality coming soon.</p>
+    <div>
+      <h4>All Groups</h4>
+      <button onclick="loadGroups()">Refresh Groups</button>
+      <ul id="groupsList"></ul>
+    </div>
+  </div>
 </div>
 
 <script>
-// ===== CONFIG =====
-const API_BASE = 'https://popychat-net-version2.onrender.com';
+const API_URL = "https://popychat-net-version2.onrender.com";
+let currentUser = null;
 
-let currentUser = '';
-
-// ===== LOGIN =====
-document.getElementById('loginBtn').addEventListener('click', async () => {
-    const username = document.getElementById('loginUser').value;
-    const password = document.getElementById('loginPass').value;
-
-    const res = await fetch(`${API_BASE}/login`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({username,password})
-    });
-    const data = await res.json();
-    const msg = document.getElementById('loginMsg');
-    if(data.ok){
-        msg.textContent = 'Signed in successfully!';
-        document.getElementById('loginCard').classList.add('hidden');
-        document.getElementById('menuCard').classList.remove('hidden');
-        document.getElementById('whoami').textContent = username + ' (' + data.role + ')';
-        currentUser = username;
-    } else {
-        msg.textContent = data.msg;
-    }
-});
-
-// ===== NAV BUTTONS =====
-document.querySelectorAll('#menuCard button').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-        document.querySelectorAll('.card').forEach(c=>c.classList.add('hidden'));
-        document.getElementById('menuCard').classList.remove('hidden');
-        const target = document.querySelector(btn.dataset.open);
-        if(target) target.classList.remove('hidden');
-    });
-});
-
-// ===== SEND PM =====
-document.getElementById('pmSendBtn').addEventListener('click', async ()=>{
-    const to = document.getElementById('pmTo').value;
-    const text = document.getElementById('pmText').value;
-    const res = await fetch(`${API_BASE}/sendPM`, {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({from:currentUser,to,text})
-    });
-    const data = await res.json();
-    const msg = document.getElementById('pmSendMsg');
-    if(data.ok){
-        msg.textContent = 'Message sent!';
-        document.getElementById('pmText').value = '';
-        loadInbox();
-    } else {
-        msg.textContent = data.msg;
-    }
-});
-
-// ===== LOAD INBOX =====
-async function loadInbox(){
-    if(!currentUser) return;
-    const res = await fetch(`${API_BASE}/inbox/${currentUser}`);
-    const data = await res.json();
-    const chatBox = document.getElementById('chatMessages');
-    chatBox.innerHTML = '';
-    if(data.ok){
-        data.messages.forEach((m,i)=>{
-            const div = document.createElement('div');
-            div.textContent = `${m.from}: ${m.text}`;
-            chatBox.appendChild(div);
-        });
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }
+async function signup() {
+  const email = document.getElementById("signupEmail").value;
+  const password = document.getElementById("signupPassword").value;
+  
+  const res = await fetch(`${API_URL}/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await res.json();
+  alert(data.message || data.error);
 }
 
-// Poll inbox every 3 seconds
-setInterval(loadInbox,3000);
+async function login() {
+  const email = document.getElementById("loginEmail").value;
+  const password = document.getElementById("loginPassword").value;
+  
+  const res = await fetch(`${API_URL}/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await res.json();
+  
+  if (data.error) {
+    alert(data.error);
+  } else {
+    currentUser = { email, role: data.role };
+    document.getElementById("userEmail").textContent = email;
+    document.getElementById("userRole").textContent = data.role;
+    document.getElementById("login").style.display = "none";
+    document.getElementById("signup").style.display = "none";
+    document.getElementById("chat").style.display = "block";
+  }
+}
+
+async function createGroup() {
+  const groupName = document.getElementById("groupName").value;
+  const res = await fetch(`${API_URL}/groups/create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: currentUser.email, groupName })
+  });
+  const data = await res.json();
+  alert(data.message || data.error);
+}
+
+async function joinGroup() {
+  const groupName = document.getElementById("joinGroupName").value;
+  const res = await fetch(`${API_URL}/groups/join`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: currentUser.email, groupName })
+  });
+  const data = await res.json();
+  alert(data.message || data.error);
+}
+
+async function loadGroups() {
+  const res = await fetch(`${API_URL}/groups`);
+  const groups = await res.json();
+  const list = document.getElementById("groupsList");
+  list.innerHTML = "";
+  groups.forEach(g => {
+    const li = document.createElement("li");
+    li.textContent = `${g.name} (members: ${g.members.length})`;
+    list.appendChild(li);
+  });
+}
 </script>
-</body>
-</html>
