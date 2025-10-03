@@ -12,7 +12,7 @@ app.use(cors());
 const USERS_FILE = "./data.json";
 
 // your permanent admin emails
-const ADMIN_EMAILS = ["youremail1@example.com", "youremail2@example.com"];
+const ADMIN_EMAILS = ["tobysaltmarsh@hotmail.com", "saltmarshtoby@gmai.com"];
 
 // load users
 function loadUsers() {
