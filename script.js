@@ -1,4 +1,4 @@
-const API_URL = "/"; // same domain as Render backend
+const API_URL = "/"; // Render backend same domain
 let currentUser = null;
 let currentGroup = null;
 let messageInterval = null;
@@ -44,8 +44,6 @@ async function login() {
 // --- GROUPS ---
 async function createGroup() {
   const groupName = document.getElementById("groupName").value;
-  if (!groupName) return alert("Enter a group name");
-
   const res = await fetch(`${API_URL}groups/create`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -58,8 +56,6 @@ async function createGroup() {
 
 async function joinGroup() {
   const groupName = document.getElementById("joinGroupName").value;
-  if (!groupName) return alert("Enter a group name");
-
   const res = await fetch(`${API_URL}groups/join`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -75,11 +71,9 @@ async function loadGroups() {
   const groups = await res.json();
   const list = document.getElementById("groupsList");
   list.innerHTML = "";
-
   groups.forEach(g => {
     const li = document.createElement("li");
     li.textContent = `${g.name} (members: ${g.members.length})`;
-    li.style.cursor = "pointer";
     li.onclick = () => openGroup(g.name);
     list.appendChild(li);
   });
@@ -92,7 +86,7 @@ function openGroup(groupName) {
   document.getElementById("groupMessages").innerHTML = "";
   if (messageInterval) clearInterval(messageInterval);
   loadMessages();
-  messageInterval = setInterval(loadMessages, 3000); // refresh every 3s
+  messageInterval = setInterval(loadMessages, 3000);
 }
 
 // --- LOAD MESSAGES ---
@@ -107,6 +101,7 @@ async function loadMessages() {
     div.textContent = `[${new Date(m.time).toLocaleTimeString()}] ${m.from}: ${m.text}`;
     container.appendChild(div);
   });
+  container.scrollTop = container.scrollHeight;
 }
 
 // --- SEND MESSAGE ---
